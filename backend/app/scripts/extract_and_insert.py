@@ -1,11 +1,13 @@
 import sys
 import os
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 import pandas as pd
-from connection.db_connection import get_collection
-from models.case import Case, YearLoss, DriverData
+
+# from connection.db_connection import get_collection
+from app.db_connection import get_collection
+from app.models.case import Case, YearLoss, DriverData
 from typing import Dict
 
 collection = get_collection()
@@ -23,7 +25,7 @@ def extract_and_insert(excel_file: str):
         existing = collection.find_one({"country": country})
         if not existing:
             case = Case(country=country, drivers=[])
-            collection.insert_one(case.dict())
+            collection.insert_one(case.model_dump())
             existing_id = collection.find_one({"country": country})["_id"]
         else:
             existing_id = existing["_id"]
@@ -35,7 +37,7 @@ def extract_and_insert(excel_file: str):
         # Update nested drivers
         collection.update_one(
             {"_id": existing_id},
-            {"$push": {"drivers": driver_data.dict()}}
+            {"$push": {"drivers": driver_data.model_dump()}}
         )
         inserted_count += 1
     

@@ -1,7 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-# from routes.case_routes import router as case_router
-# from middleware.error_handler import error_handler
 from app.routes.case_routes import router as case_router
 from app.middleware.error_handler import error_handler
 from dotenv import load_dotenv

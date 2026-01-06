@@ -7,6 +7,30 @@
       </button>
     </div>
 
+    <!-- Filter Section -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title">Filter Data</h5>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Negara</label>
+            <input v-model="filterCountry" type="text" class="form-control" placeholder="Filter berdasarkan negara">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Penyebab (Driver)</label>
+            <input v-model="filterDriver" type="text" class="form-control" placeholder="Filter berdasarkan driver">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Tahun</label>
+            <input v-model.number="filterYear" type="number" class="form-control" placeholder="Filter berdasarkan tahun">
+          </div>
+        </div>
+        <div class="mt-3">
+          <button @click="clearFilters" class="btn btn-outline-secondary">Clear Filter</button>
+        </div>
+      </div>
+    </div>
+
     <div class="card shadow-sm">
       <div class="card-body p-0">
         <div class="table-responsive">
@@ -22,7 +46,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="log in logs" :key="log.id">
+              <tr v-for="log in displayedLogs" :key="log.id">
                 <td class="fw-bold">{{ log.country }}</td>
                 <td><span class="badge bg-info text-dark">{{ log.driver }}</span></td>
                 <td>{{ log.year }}</td>
@@ -37,14 +61,35 @@
                   </button>
                 </td>
               </tr>
-              <tr v-if="logs.length === 0">
+              <tr v-if="isLoading">
+                <td colspan="6" class="text-center py-4"><span class="spinner-border spinner-border-sm text-primary me-2"></span>Memuat data...</td>
+              </tr>
+              <tr v-else-if="logs.length === 0">
                 <td colspan="6" class="text-center py-4 text-muted">Belum ada data di database MongoDB lokal Anda.</td>
+              </tr>
+              <tr v-else-if="filteredLogs.length === 0 && (filterCountry || filterDriver || filterYear)">
+                <td colspan="6" class="text-center py-4 text-muted">Tidak ada data yang cocok dengan filter yang diterapkan.</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
+
+    <!-- Pagination -->
+    <nav v-if="totalPages > 1" class="mt-3" aria-label="Data pagination">
+      <ul class="pagination justify-content-center">
+        <li class="page-item" :class="{ disabled: currentPage === 1 }">
+          <button class="page-link" @click="goToPage(currentPage - 1)" :disabled="currentPage === 1">Previous</button>
+        </li>
+        <li v-for="page in visiblePages" :key="page" class="page-item" :class="{ active: page === currentPage }">
+          <button class="page-link" @click="goToPage(page)">{{ page }}</button>
+        </li>
+        <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+          <button class="page-link" @click="goToPage(currentPage + 1)" :disabled="currentPage === totalPages">Next</button>
+        </li>
+      </ul>
+    </nav>
 
     <div class="modal-backdrop" v-if="modals.create">
       <div class="custom-modal shadow-lg">
@@ -113,12 +158,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 
-// Konfigurasi API - Gunakan prefix /api/forest sesuai main.py
-const API_URL = "http://localhost:8000/api/forest";
+const API_URL = "http://localhost:8000/cases";
 
 const logs = ref([]);
+const isLoading = ref(false);
 const modals = ref({ create: false, update: false, delete: false });
 
 const createForm = ref({
@@ -129,27 +174,87 @@ const createForm = ref({
   threshold: 30
 });
 
-const updateForm = ref({ id: '', country: '', loss: null });
+const updateForm = ref({ country: '', driver: '', year: null, loss: null });
+
+// Filters
+const filterCountry = ref('');
+const filterDriver = ref('');
+const filterYear = ref(null);
+
+// Pagination
+const currentPage = ref(1);
+const itemsPerPage = 25;
+
+const filteredLogs = computed(() => {
+  return logs.value.filter(log => {
+    const matchesCountry = !filterCountry.value || log.country.toLowerCase().includes(filterCountry.value.toLowerCase());
+    const matchesDriver = !filterDriver.value || log.driver.toLowerCase().includes(filterDriver.value.toLowerCase());
+    const matchesYear = !filterYear.value || log.year === filterYear.value;
+    return matchesCountry && matchesDriver && matchesYear;
+  });
+});
+
+const totalPages = computed(() => Math.ceil(filteredLogs.value.length / itemsPerPage));
+
+const displayedLogs = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return filteredLogs.value.slice(start, end);
+});
+
+const visiblePages = computed(() => {
+  const pages = [];
+  const start = Math.max(1, currentPage.value - 2);
+  const end = Math.min(totalPages.value, currentPage.value + 2);
+  for (let i = start; i <= end; i++) {
+    pages.push(i);
+  }
+  return pages;
+});
 
 // 1. Ambil Data (READ)
 async function loadData() {
+  isLoading.value = true;
   try {
-    const response = await fetch(`${API_URL}/`);
+    const response = await fetch(API_URL);
     if (response.ok) {
-      logs.value = await response.json();
+      const rawData = await response.json();
+      console.log("Raw Data from API:", rawData); // Cek console browser (F12) untuk melihat data asli
+      logs.value = rawData.flatMap(doc => 
+        (doc.drivers || []).flatMap(drv => 
+          (drv.losses || []).map(l => ({
+            id: `${doc._id}_${drv.driver}_${l.year}`,
+            realId: doc._id,
+            country: doc.country,
+            driver: drv.driver,
+            year: l.year,
+            loss: l.tc_loss_ha,
+            threshold: 30
+          }))
+        )
+      );
+      currentPage.value = 1; // Reset to first page after loading data
     }
   } catch (err) {
     console.error("Gagal memuat data MongoDB:", err);
+  } finally {
+    isLoading.value = false;
   }
 }
 
 // 2. Tambah Data (CREATE)
 async function createLog() {
   try {
-    const response = await fetch(`${API_URL}/`, {
+    // Format data sesuai backend: { country, driver, losses: [{year, tc_loss_ha}] }
+    const payload = {
+      country: createForm.value.country,
+      driver: createForm.value.driver,
+      losses: [{ year: createForm.value.year, tc_loss_ha: createForm.value.loss }]
+    };
+    const response = await fetch(`${API_URL}`, { // Hapus trailing slash
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(createForm.value)
+      body: JSON.stringify(payload)
     });
     
     if (response.ok) {
@@ -165,10 +270,16 @@ async function createLog() {
 // 3. Update Data (UPDATE)
 async function updateLog() {
   try {
-    const response = await fetch(`${API_URL}/log/${updateForm.value.id}`, {
+    const payload = {
+      country: updateForm.value.country,
+      driver: updateForm.value.driver,
+      year: updateForm.value.year,
+      new_data: { tc_loss_ha: updateForm.value.loss }
+    };
+    const response = await fetch(`${API_URL}`, { // Endpoint /cases (PUT)
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updateForm.value)
+      body: JSON.stringify(payload)
     });
     
     if (response.ok) {
@@ -184,7 +295,9 @@ async function updateLog() {
 async function openDeleteModal(log) {
   if (confirm(`Apakah Anda yakin ingin menghapus data log untuk negara ${log.country}?`)) {
     try {
-      const response = await fetch(`${API_URL}/log/${log.id}`, { method: "DELETE" });
+      // Gunakan Query Params untuk DELETE
+      const params = new URLSearchParams({ country: log.country, driver: log.driver, year: log.year });
+      const response = await fetch(`${API_URL}?${params.toString()}`, { method: "DELETE" });
       if (response.ok) loadData();
     } catch (err) {
       alert("Gagal menghapus data!");
@@ -197,12 +310,25 @@ function openModal(id) { modals.value[id] = true; }
 function closeModal(id) { modals.value[id] = false; }
 
 function openUpdateModal(log) {
-  updateForm.value = { id: log.id, country: log.country, loss: log.loss };
+  updateForm.value = { country: log.country, driver: log.driver, year: log.year, loss: log.loss };
   openModal('update');
 }
 
 function resetCreateForm() {
   createForm.value = { country: '', driver: '', year: 2024, loss: null, threshold: 30 };
+}
+
+function goToPage(page) {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+}
+
+function clearFilters() {
+  filterCountry.value = '';
+  filterDriver.value = '';
+  filterYear.value = null;
+  currentPage.value = 1;
 }
 
 onMounted(loadData);

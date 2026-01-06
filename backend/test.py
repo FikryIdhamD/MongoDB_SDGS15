@@ -29,11 +29,12 @@ app.add_middleware(
 )
 
 # 5. Import & Koneksi Database (Memicu eksekusi database.py)
-from app.database import forest_collection 
+from app.db_connection import forest_collection 
 
 # 6. Routing (Menghubungkan ke folder routes)
-from app.routes.forest import router as forest_router
-app.include_router(forest_router, prefix="/api/forest", tags=["Forest Monitoring"])
+# from app.routes.forest import router as forest_router
+from app.routes.case_routes import router as case_router
+app.include_router(case_router, prefix="/api/case", tags=["Case Monitoring"])
 
 @app.get("/")
 async def root():
