@@ -1,5 +1,4 @@
 <template>
-  
   <div class="container mt-4">
     <!-- News Section -->
     <div class="mt-4">
@@ -84,7 +83,6 @@
         </div>
       </div>
     </div>
-    
     <!-- Charts Section -->
     <div class="mt-4">
       <h3 class="text-success mb-3"><i class="bi bi-graph-up"></i> Grafik Analisis SDG 15</h3>
@@ -95,13 +93,31 @@
               <h5 class="mb-0">Grafik Batang - Kerusakan per Negara</h5>
             </div>
             <div class="card-body">
-              <svg width="100%" height="200" viewBox="0 0 400 200">
-                <g v-for="(stat, index) in countryStats.slice(0, 5)" :key="stat.country">
-                  <rect :x="index * 70 + 20" y="180" :width="40" :height="-(stat.totalLoss / maxLoss * 150)" fill="#dc3545" stroke="#000" stroke-width="1"/>
-                  <text :x="index * 70 + 40" y="195" text-anchor="middle" font-size="10">{{ stat.country }}</text>
-                  <text :x="index * 70 + 40" :y="175 - (stat.totalLoss / maxLoss * 150)" text-anchor="middle" font-size="8" fill="#fff">{{ stat.totalLoss.toFixed(0) }}</text>
-                </g>
-              </svg>
+              <div class="d-flex justify-content-center">
+                <svg width="100%" height="200" viewBox="0 0 400 200">
+                  <g v-for="(stat, index) in countryStats.slice(0, 5)" :key="stat.country">
+                    <rect 
+                      :x="index * 70 + 20" 
+                      :y="180 - (stat.totalLoss / maxLoss * 150)" 
+                      :width="40" 
+                      :height="(stat.totalLoss / maxLoss * 150)" 
+                      fill="#dc3545" 
+                      stroke="#000" 
+                      stroke-width="1"
+                    />
+                    <text :x="index * 70 + 40" y="195" text-anchor="middle" font-size="10">{{ stat.country }}</text>
+                    <text 
+                      :x="index * 70 + 40" 
+                      :y="175 - (stat.totalLoss / maxLoss * 150)" 
+                      text-anchor="middle" 
+                      font-size="8" 
+                      fill="#000"
+                    >
+                      {{ stat.totalLoss.toFixed(0) }}
+                    </text>
+                  </g>
+                </svg>
+              </div>
             </div>
           </div>
         </div>
@@ -111,19 +127,20 @@
               <h5 class="mb-0">Grafik Garis - Tren Kerusakan per Tahun</h5>
             </div>
             <div class="card-body">
-              <svg width="100%" height="200" viewBox="0 0 400 200">
-                <polyline :points="yearlyTrendPoints" fill="none" stroke="#ffc107" stroke-width="3"/>
-                <g v-for="(point, index) in yearlyTrend" :key="point.year">
-                  <circle :cx="index * 60 + 40" :cy="180 - (point.loss / maxYearlyLoss * 150)" r="4" fill="#ffc107"/>
-                  <text :x="index * 60 + 40" y="195" text-anchor="middle" font-size="10">{{ point.year }}</text>
-                </g>
-              </svg>
+              <div class="d-flex justify-content-center">
+                <svg width="100%" height="200" viewBox="0 0 400 200">
+                  <polyline :points="yearlyTrendPoints" fill="none" stroke="#ffc107" stroke-width="3"/>
+                  <g v-for="(point, index) in yearlyTrend" :key="point.year">
+                    <circle :cx="index * 60 + 40" :cy="180 - (point.loss / maxYearlyLoss * 150)" r="4" fill="#ffc107"/>
+                    <text :x="index * 60 + 40" y="195" text-anchor="middle" font-size="10">{{ point.year }}</text>
+                  </g>
+                </svg>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-    
     <!-- Custom Charts Section -->
     <div class="mt-4">
       <h3 class="text-success mb-3"><i class="bi bi-bar-chart-line"></i> Grafik Kustom SDG 15</h3>
@@ -159,34 +176,69 @@
           <h5 class="mb-0">{{ chartTitle }}</h5>
         </div>
         <div class="card-body">
-          <div v-if="chartType === 'line'">
-            <svg width="100%" height="250" viewBox="0 0 500 250">
-              <polyline :points="customLinePoints" fill="none" stroke="#28a745" stroke-width="3"/>
-              <g v-for="(point, index) in customLineData" :key="point.year">
-                <circle :cx="index * 70 + 50" :cy="220 - (point.loss / customMaxLoss * 180)" r="5" fill="#28a745"/>
-                <text :x="index * 70 + 50" y="240" text-anchor="middle" font-size="10">{{ point.year }}</text>
-                <text :x="index * 70 + 50" :y="210 - (point.loss / customMaxLoss * 180)" text-anchor="middle" font-size="9" fill="#000">{{ point.loss.toFixed(0) }}</text>
-              </g>
-            </svg>
+          <div v-if="chartType === 'line'" class="d-flex justify-content-center">
+            <div style="overflow-x: auto; width: 100%; max-width: 100%;">
+              <svg :width="svgWidth" height="250" :viewBox="`0 0 ${svgWidth} 250`">
+                <polyline :points="customLinePoints" fill="none" stroke="#28a745" stroke-width="3"/>
+                <g v-for="(point, index) in customLineData" :key="point.year">
+                  <circle :cx="(svgWidth - (customLineData.length > 1 ? (customLineData.length - 1) * lineSpacing : 0)) / 2 + index * lineSpacing" :cy="220 - (point.loss / customMaxLoss * 180)" r="5" fill="#28a745"/>
+                  <text :x="(svgWidth - (customLineData.length > 1 ? (customLineData.length - 1) * lineSpacing : 0)) / 2 + index * lineSpacing" y="240" text-anchor="middle" font-size="10">{{ point.year }}</text>
+                  <text :x="(svgWidth - (customLineData.length > 1 ? (customLineData.length - 1) * lineSpacing : 0)) / 2 + index * lineSpacing" :y="210 - (point.loss / customMaxLoss * 180)" text-anchor="middle" font-size="9" fill="#000">{{ point.loss.toFixed(0) }}</text>
+                </g>
+              </svg>
+            </div>
+            <p v-if="customLineData.length === 0" class="text-center text-muted mt-3">Tidak ada data untuk ditampilkan pada grafik garis.</p>
           </div>
-          <div v-else>
-            <svg width="100%" height="250" viewBox="0 0 500 250">
+          <div v-else class="d-flex justify-content-center">
+          <div class="table-responsive w-100 text-center">
+            <svg :width="customBarSvgWidth" height="400" :viewBox="`0 0 ${customBarSvgWidth} 400`" class="mx-auto">
               <g v-for="(stat, index) in customBarData" :key="stat.label">
-                <rect :x="index * 80 + 30" y="220" :width="50" :height="-(stat.value / customMaxBar * 180)" fill="#17a2b8" stroke="#000" stroke-width="1"/>
-                <text :x="index * 80 + 55" y="235" text-anchor="middle" font-size="10" transform="rotate(-45, index * 80 + 55, 235)">{{ stat.label }}</text>
-                <text :x="index * 80 + 55" :y="215 - (stat.value / customMaxBar * 180)" text-anchor="middle" font-size="9" fill="#fff">{{ stat.value.toFixed(0) }}</text>
+                
+                <rect 
+                  :x="chartOffsetX + (index * barSpacing) + (barSpacing - barWidth) / 2" 
+                  :y="250 - (stat.value / customMaxBar * 200)" 
+                  :width="barWidth" 
+                  :height="(stat.value / customMaxBar * 200)" 
+                  :fill="barColors[index % barColors.length]" 
+                  stroke="#333" 
+                  stroke-width="1"
+                />
+                
+                <text 
+                  :x="chartOffsetX + (index * barSpacing) + barSpacing / 2" 
+                  :y="245 - (stat.value / customMaxBar * 200)" 
+                  text-anchor="middle" 
+                  font-size="10" 
+                  fill="#000"
+                  font-weight="bold"
+                >
+                  {{ stat.value > 1000000 ? stat.value.toExponential(1) : stat.value.toLocaleString() }}
+                </text>
+
+                <text 
+                  :x="chartOffsetX + (index * barSpacing) + barSpacing / 2" 
+                  y="270" 
+                  text-anchor="end" 
+                  font-size="11" 
+                  :transform="`rotate(-45, ${chartOffsetX + (index * barSpacing) + barSpacing / 2}, 270)`"
+                >
+                  {{ stat.label }}
+                </text>
               </g>
+              
+              <line :x1="chartOffsetX" y1="250" :x2="customBarSvgWidth - chartOffsetX" y2="250" stroke="#000" stroke-width="2" />
             </svg>
           </div>
+        </div>
         </div>
       </div>
     </div>
     <br>
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h2 class="text-success"><i class="bi bi-tree-fill"></i> Data Monitoring Hutan</h2>
-      <button @click="openModal('create')" class="btn btn-success shadow-sm">
+      <!-- <button @click="openModal('create')" class="btn btn-success shadow-sm">
         <i class="bi bi-plus-lg"></i> Tambah Log Baru
-      </button>
+      </button> -->
     </div>
 
     <!-- Filter Section -->
@@ -342,7 +394,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 
-const API_URL = "http://localhost:8000/cases";
+const API_URL = "/api/case/cases";
 
 const logs = ref([]);
 const isLoading = ref(false);
@@ -534,6 +586,42 @@ const chartTitle = computed(() => {
   return title;
 });
 
+const barSpacing = 100; // Jarak antar batang
+const barWidth = 40;    // Lebar batang
+
+// Menghitung titik awal (offset) agar semua batang kumpul di tengah
+const chartOffsetX = computed(() => {
+  const totalBarWidth = customBarData.value.length * barSpacing;
+  // Jika total lebar batang lebih kecil dari lebar SVG, hitung selisihnya
+  const offset = (customBarSvgWidth.value - totalBarWidth) / 2;
+  return Math.max(20, offset); // Minimal jarak 20px dari kiri
+});
+
+// Perbaikan: Batasi nilai maksimal jika ada angka outlier (opsional)
+// Ini supaya angka 1.10e21 tidak merusak visual batang lainnya
+const customMaxBar = computed(() => {
+  const values = customBarData.value.map(stat => stat.value);
+  if (values.length === 0) return 1;
+  
+  const max = Math.max(...values);
+  // Jika nilai terlalu gila (outlier), kita bisa cap atau tetap pakai max 
+  // tapi disarankan bersihkan data di Database (MongoDB)
+  return max > 0 ? max : 1;
+});
+
+
+
+// Mengatur jarak antar batang
+// const barSpacing = 100; // Jarak antar batang
+const customBarSvgWidth = computed(() => {
+  return Math.max(500, customBarData.value.length * barSpacing + 100);
+});
+
+// const customMaxBar = computed(() => {
+//   const values = customBarData.value.map(stat => stat.value);
+//   return values.length > 0 ? Math.max(...values, 1) : 1;
+// });
+
 const filteredChartData = computed(() => {
   return logs.value.filter(log => {
     return (!chartFilterCountry.value || log.country === chartFilterCountry.value) &&
@@ -556,9 +644,17 @@ const customMaxLoss = computed(() => {
   return Math.max(...customLineData.value.map(point => point.loss), 1);
 });
 
+const lineSpacing = computed(() => Math.max(60, customLineData.value.length > 1 ? 400 / (customLineData.value.length - 1) : 70));
+
+const svgWidth = computed(() => Math.max(500, (customLineData.value.length - 1) * lineSpacing.value + 100));
+
 const customLinePoints = computed(() => {
+  const length = customLineData.value.length;
+  const spacing = lineSpacing.value;
+  const totalWidth = length > 1 ? (length - 1) * spacing : 0;
+  const offset = (svgWidth.value - totalWidth) / 2;
   return customLineData.value.map((point, index) => 
-    `${index * 70 + 50},${220 - (point.loss / customMaxLoss.value * 180)}`
+    `${offset + index * spacing},${220 - (point.loss / customMaxLoss.value * 180)}`
   ).join(' ');
 });
 
@@ -590,31 +686,54 @@ const customBarData = computed(() => {
   }
 });
 
-const customMaxBar = computed(() => {
-  return Math.max(...customBarData.value.map(stat => stat.value), 1);
-});
+// const customMaxBar = computed(() => {
+//   return Math.max(...customBarData.value.map(stat => stat.value), 1);
+// });
+
+// Bar colors for variety
+const barColors = ['#dc3545', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
 
 // 1. Ambil Data (READ)
 async function loadData() {
   isLoading.value = true;
   try {
-    const response = await fetch(API_URL);
+    // Gunakan batch limit yang aman (misal 100) untuk menghindari error 422 dari backend
+    const batchLimit = 100;
+    
+    // Fetch halaman pertama
+    const response = await fetch(`${API_URL}?page=1&limit=${batchLimit}`);
     if (response.ok) {
-      const rawData = await response.json();
-      console.log("Raw Data from API:", rawData); // Cek console browser (F12) untuk melihat data asli
-      logs.value = rawData.flatMap(doc => 
-        (doc.drivers || []).flatMap(drv => 
-          (drv.losses || []).map(l => ({
-            id: `${doc._id}_${drv.driver}_${l.year}`,
-            realId: doc._id,
-            country: doc.country,
-            driver: drv.driver,
-            year: l.year,
-            loss: l.tc_loss_ha,
-            threshold: 30
-          }))
-        )
-      );
+      const result = await response.json();
+      let allData = result.data || [];
+      const total = result.total || 0;
+      
+      // Jika total data lebih besar dari batchLimit, fetch sisanya
+      const totalPagesToFetch = Math.ceil(total / batchLimit);
+      if (totalPagesToFetch > 1) {
+        const promises = [];
+        for (let p = 2; p <= totalPagesToFetch; p++) {
+          promises.push(fetch(`${API_URL}?page=${p}&limit=${batchLimit}`).then(res => res.json()));
+        }
+        
+        const results = await Promise.all(promises);
+        results.forEach(res => {
+          if (res.data) {
+            allData = allData.concat(res.data);
+          }
+        });
+      }
+      
+      // Mapping data dari format API (flattened) ke format komponen
+      logs.value = allData.map(item => ({
+        id: item.id,
+        realId: item.id,
+        country: item.country,
+        driver: item.driver,
+        year: item.year,
+        loss: typeof item.tc_loss_ha === 'number' ? item.tc_loss_ha : parseFloat(item.tc_loss_ha || 0),
+        threshold: item.threshold || 30
+      }));
+      
       currentPage.value = 1; // Reset to first page after loading data
     }
   } catch (err) {

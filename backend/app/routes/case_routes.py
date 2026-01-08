@@ -19,13 +19,13 @@ def create(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/cases", response_model=List[Dict])
+@router.get("/cases", response_model=Dict)
 def read(
     country: Optional[str] = Query(None),
     driver: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100)
+    limit: int = Query(25, ge=1, le=100)
 ):
     return read_cases(country, driver, year, page, limit)
 

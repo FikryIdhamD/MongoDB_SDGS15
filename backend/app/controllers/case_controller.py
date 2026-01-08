@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 collection = get_collection()
 
-def create_or_append_case(country: str, driver: str, losses: List[Dict]) -> str:
+def create_or_append_case(country: str, driver: str, losses: List[Dict], threshold: Optional[int] = None) -> str:
     if not losses:
         raise HTTPException(status_code=422, detail="At least 1 loss entry required")
 
@@ -17,7 +17,7 @@ def create_or_append_case(country: str, driver: str, losses: List[Dict]) -> str:
     existing = collection.find_one({"country": country})
     if not existing:
         new_driver = DriverData(driver=driver, losses=loss_objects)
-        new_case = Case(country=country, drivers=[new_driver])
+        new_case = Case(country=country, drivers=[new_driver], threshold=threshold if threshold is not None else 30)
         result = collection.insert_one(new_case.model_dump())
         return str(result.inserted_id)
 
@@ -26,19 +26,35 @@ def create_or_append_case(country: str, driver: str, losses: List[Dict]) -> str:
     if driver_index is None:
         new_driver = DriverData(driver=driver, losses=loss_objects).model_dump()
         collection.update_one({"_id": existing['_id']}, {"$push": {"drivers": new_driver}})
+        if threshold is not None:
+            collection.update_one({"_id": existing['_id']}, {"$set": {"threshold": threshold}})
         return str(existing['_id'])
 
-    # Check duplicate years
-    existing_years = {loss['year'] for loss in existing['drivers'][driver_index]['losses']}
+    # Handle duplicate years (Update instead of Conflict)
+    existing_years_indices = {loss['year']: idx for idx, loss in enumerate(existing['drivers'][driver_index]['losses'])}
+    
+    losses_to_push = []
+    
     for loss in loss_objects:
-        if loss.year in existing_years:
-            raise HTTPException(status_code=409, detail=f"Duplicate year {loss.year} for {country}/{driver}")
+        if loss.year in existing_years_indices:
+            # Update existing year data
+            idx = existing_years_indices[loss.year]
+            collection.update_one(
+                {"_id": existing['_id']},
+                {"$set": {f"drivers.{driver_index}.losses.{idx}.tc_loss_ha": loss.tc_loss_ha}}
+            )
+        else:
+            losses_to_push.append(loss)
 
-    # Append
-    collection.update_one(
-        {"_id": existing['_id'], "drivers.driver": driver},
-        {"$addToSet": {"drivers.$.losses": {"$each": [l.model_dump() for l in loss_objects]}}}  # $addToSet cegah duplikat
-    )
+    if losses_to_push:
+        collection.update_one(
+            {"_id": existing['_id'], "drivers.driver": driver},
+            {"$push": {"drivers.$.losses": {"$each": [l.model_dump() for l in losses_to_push]}}}
+        )
+        
+    if threshold is not None:
+        collection.update_one({"_id": existing['_id']}, {"$set": {"threshold": threshold}})
+        
     return str(existing['_id'])
 
 # Fungsi lama tetap untuk full create jika perlu
@@ -46,18 +62,88 @@ def create_case(case: Case) -> str:
     # Check duplikat di level model
     return str(collection.insert_one(case.model_dump()).inserted_id)
 
-def read_cases(country: Optional[str] = None, driver: Optional[str] = None, year: Optional[int] = None, page: int = 1, limit: int = 10) -> List[Dict]:
+def read_cases(country: Optional[str] = None, driver: Optional[str] = None, year: Optional[int] = None, page: int = 1, limit: int = 10) -> Dict:
     query = {}
-    if country: query["country"] = {"$regex": country, "$options": "i"}  # Insensitive
+    if country: query["country"] = {"$regex": country, "$options": "i"}
     if driver: query["drivers.driver"] = {"$regex": driver, "$options": "i"}
     if year: query["drivers.losses.year"] = year
 
-    cursor = collection.find(query, {"_id": 0}).sort([("drivers.losses.year", -1)]).skip((page - 1) * limit).limit(limit)
-    return list(cursor)
+    print(f"Query: {query}, year: {year}, type: {type(year)}")  # Debug print
+
+    # Pipeline for total count
+    total_pipeline = [
+        {"$match": query},
+        {"$unwind": "$drivers"},
+        {"$unwind": "$drivers.losses"},
+        {"$count": "total"}
+    ]
+    total_result = list(collection.aggregate(total_pipeline))
+    total = total_result[0]["total"] if total_result else 0
+
+    # Pipeline for data
+    data_pipeline = [
+        {"$match": query},
+        {"$unwind": "$drivers"},
+        {"$unwind": "$drivers.losses"},
+        {"$sort": {"drivers.losses.year": 1}},
+        {"$skip": (page - 1) * limit},
+        {"$limit": limit},
+        {"$project": {
+            "_id": 0,
+            "id": {"$toString": "$_id"},
+            "country": 1,
+            "driver": "$drivers.driver",
+            "year": "$drivers.losses.year",
+            "tc_loss_ha": "$drivers.losses.tc_loss_ha",
+            "threshold": 1,
+            "sdg_indicator": 1
+        }}
+    ]
+    data = list(collection.aggregate(data_pipeline))
+
+    return {"data": data, "total": total, "page": page, "limit": limit}
 
 def update_case(country: str, driver: str, year: int, new_data: Dict) -> bool:
     if not new_data:
         raise HTTPException(status_code=400, detail="No data to update")
+
+    new_country = new_data.get('country', country)
+    new_driver = new_data.get('driver', driver)
+    
+    # Ensure year is treated as int for comparison
+    try:
+        new_year = int(new_data.get('year', year))
+        current_year = int(year)
+    except (ValueError, TypeError):
+        new_year = new_data.get('year', year)
+        current_year = year
+        
+    new_loss = new_data.get('tc_loss_ha')
+    new_threshold = new_data.get('threshold')
+
+    # Jika kunci (Country, Driver, Year) berubah, lakukan pemindahan data
+    if new_country != country or new_driver != driver or new_year != current_year:
+        # Cek konflik data tujuan
+        conflict = collection.find_one({
+            "country": new_country,
+            "drivers": {"$elemMatch": {"driver": new_driver, "losses.year": new_year}}
+        })
+        if conflict:
+            raise HTTPException(status_code=409, detail=f"Data already exists for {new_country}/{new_driver}/{new_year}")
+
+        # 1. Hapus data lama
+        if not delete_case(country, driver, year):
+            raise HTTPException(status_code=404, detail="Original data not found")
+        
+        # 2. Buat data baru
+        loss_val = new_loss if new_loss is not None else 0
+        create_or_append_case(new_country, new_driver, [{"year": new_year, "tc_loss_ha": loss_val}])
+        
+        # 3. Update threshold jika ada
+        if new_threshold is not None:
+            collection.update_one({"country": new_country}, {"$set": {"threshold": new_threshold}})
+            
+        return True
 
     # Check existence
     existing = collection.find_one({
@@ -72,7 +158,17 @@ def update_case(country: str, driver: str, year: int, new_data: Dict) -> bool:
     loss_index = next(i for i, l in enumerate(existing['drivers'][driver_index]['losses']) if l['year'] == year)
 
     update_path = f"drivers.{driver_index}.losses.{loss_index}"
-    result = collection.update_one({"_id": existing['_id']}, {"$set": {f"{update_path}.{k}": v for k, v in new_data.items()}})
+    
+    update_fields = {}
+    if new_loss is not None:
+        update_fields[f"{update_path}.tc_loss_ha"] = new_loss
+    if new_threshold is not None:
+        update_fields["threshold"] = new_threshold
+        
+    if not update_fields:
+        return False
+        
+    result = collection.update_one({"_id": existing['_id']}, {"$set": update_fields})
     return result.modified_count > 0
 
 def delete_case(country: str, driver: Optional[str] = None, year: Optional[int] = None) -> bool:

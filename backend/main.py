@@ -1,13 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.case_routes import router as case_router
+from app.routes.user_routes import router as user_router
 from app.middleware.error_handler import error_handler
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = FastAPI()
-app.include_router(case_router)
+app.include_router(case_router, prefix="/api/case", tags=["Case Monitoring"])
+app.include_router(user_router, prefix="/api/user", tags=["User Management"])
 app.add_exception_handler(Exception, error_handler)
 
 # Add CORS

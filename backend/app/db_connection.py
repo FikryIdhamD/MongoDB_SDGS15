@@ -9,6 +9,8 @@ def get_db_connection():
     db = client[os.getenv("DB_NAME")]
     return db
 
-def get_collection():
+def get_collection(collection_name: str = None):
     db = get_db_connection()
+    if collection_name:
+        return db[collection_name]
     return db[os.getenv("COLLECTION_NAME")]
