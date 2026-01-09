@@ -3,16 +3,25 @@
     <!-- News Section -->
     <div class="mt-4">
       <h3 class="text-success mb-3"><i class="bi bi-newspaper"></i> Berita Terkini SDG 15 - Hutan</h3>
-      <div class="row">
+      <div v-if="isNewsLoading" class="text-center py-4">
+        <div class="spinner-border text-success" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted">Sedang memuat berita...</p>
+      </div>
+      <div v-else-if="newsItems.length === 0" class="text-center py-4 text-muted">
+        <p>Belum ada berita yang tersedia saat ini.</p>
+      </div>
+      <div v-else class="row">
         <div v-for="news in newsItems" :key="news.id" class="col-md-4 mb-3">
           <div class="card h-100 shadow-sm">
             <div class="card-body">
               <h5 class="card-title">{{ news.title }}</h5>
               <p class="card-text">{{ news.summary }}</p>
-              <small class="text-muted">{{ news.date }}</small>
+              <small class="text-muted"><i class="bi bi-calendar-event me-1"></i>{{ news.date }}</small>
             </div>
-            <div class="card-footer">
-              <a :href="news.link" target="_blank" class="btn btn-outline-success btn-sm">Baca Selengkapnya</a>
+            <div class="card-footer bg-transparent border-top-0">
+              <a :href="news.link" target="_blank" class="btn btn-outline-success btn-sm w-100">Baca Selengkapnya</a>
             </div>
           </div>
         </div>
@@ -325,6 +334,25 @@
       </ul>
     </nav>
 
+    <!-- Reference Links Section -->
+    <div class="mt-5 mb-5">
+      <h3 class="text-success mb-3"><i class="bi bi-link-45deg"></i> Referensi & Tautan Penting</h3>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <div class="list-group shadow-sm">
+            <a href="https://www.globalforestwatch.org/dashboards/country/IDN/?lang=id" class="list-group-item list-group-item-action" target="_blank">
+              <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1 text-success">Global Forest </h5>
+                <small class="text-muted"><i class="bi bi-box-arrow-up-right"></i></small>
+              </div>
+              <p class="mb-1">Deskripsi singkat mengenai referensi atau sumber data ini.</p>
+              <small class="text-muted">https://www.globalforestwatch.org/dashboards/country/IDN/?lang=id</small>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-backdrop" v-if="modals.create">
       <div class="custom-modal shadow-lg">
         <div class="modal-header">
@@ -398,32 +426,12 @@ const API_URL = "/api/case/cases";
 
 const logs = ref([]);
 const isLoading = ref(false);
+const serverStats = ref(null);
 const modals = ref({ create: false, update: false, delete: false });
 
 // News Items
-const newsItems = ref([
-  {
-    id: 1,
-    title: "Krisis Deforestasi Global Meningkat",
-    summary: "Laporan terbaru menunjukkan deforestasi di Amazon mencapai rekor tertinggi tahun ini.",
-    date: "6 Januari 2026",
-    link: "#"
-  },
-  {
-    id: 2,
-    title: "Inisiatif Reboisasi di Indonesia",
-    summary: "Pemerintah Indonesia meluncurkan program penanaman 1 juta pohon untuk mengatasi kerusakan hutan.",
-    date: "5 Januari 2026",
-    link: "#"
-  },
-  {
-    id: 3,
-    title: "Dampak Perubahan Iklim pada Hutan",
-    summary: "Studi ilmiah mengungkapkan bagaimana perubahan iklim mempercepat kerusakan ekosistem hutan.",
-    date: "4 Januari 2026",
-    link: "#"
-  }
-]);
+const newsItems = ref([]);
+const isNewsLoading = ref(false);
 
 // Conservation Tips
 const conservationTips = ref([
@@ -514,6 +522,15 @@ const visiblePages = computed(() => {
 });
 
 const countryStats = computed(() => {
+  if (serverStats.value?.top_countries) {
+    const stats = serverStats.value.top_countries;
+    const total = stats.reduce((sum, item) => sum + item.total_loss, 0);
+    return stats.map(item => ({
+      country: item.country,
+      totalLoss: item.total_loss,
+      percentage: total > 0 ? Math.round((item.total_loss / total) * 100) : 0
+    }));
+  }
   const stats = {};
   logs.value.forEach(log => {
     if (!stats[log.country]) stats[log.country] = 0;
@@ -527,6 +544,15 @@ const countryStats = computed(() => {
 });
 
 const driverStats = computed(() => {
+  if (serverStats.value?.drivers_breakdown) {
+    const stats = serverStats.value.drivers_breakdown;
+    const total = stats.reduce((sum, item) => sum + item.total_loss, 0);
+    return stats.map(item => ({
+      driver: item.driver,
+      totalLoss: item.total_loss,
+      percentage: total > 0 ? Math.round((item.total_loss / total) * 100) : 0
+    }));
+  }
   const stats = {};
   logs.value.forEach(log => {
     if (!stats[log.driver]) stats[log.driver] = 0;
@@ -543,6 +569,11 @@ const maxLoss = computed(() => {
 });
 
 const yearlyTrend = computed(() => {
+  if (serverStats.value?.yearly_trend) {
+    return serverStats.value.yearly_trend
+      .map(item => ({ year: item.year, loss: item.total_loss }))
+      .slice(-6);
+  }
   const stats = {};
   logs.value.forEach(log => {
     if (!stats[log.year]) stats[log.year] = 0;
@@ -734,7 +765,7 @@ async function loadData() {
         threshold: item.threshold || 30
       }));
       
-      currentPage.value = 1; // Reset to first page after loading data
+      currentPage.value = 1;
     }
   } catch (err) {
     console.error("Gagal memuat data MongoDB:", err);
@@ -743,16 +774,45 @@ async function loadData() {
   }
 }
 
+async function fetchNews() {
+  isNewsLoading.value = true;
+  try {
+    // Gunakan URL absolut ke backend (port 8000) untuk menghindari masalah proxy
+    const response = await fetch('http://localhost:8000/api/news/news');
+    if (response.ok) {
+      const result = await response.json();
+      newsItems.value = result.data;
+    } else {
+      console.error("Gagal mengambil berita, status:", response.status);
+    }
+  } catch (error) {
+    console.error("Gagal memuat berita (Network Error):", error);
+  } finally {
+    isNewsLoading.value = false;
+  }
+}
+
+// 5. Fetch Dashboard Statistics (Aggregation)
+async function fetchDashboardStats() {
+  try {
+    const response = await fetch('/api/case/stats');
+    if (response.ok) {
+      serverStats.value = await response.json();
+    }
+  } catch (err) {
+    console.error("Gagal memuat statistik dashboard:", err);
+  }
+}
+
 // 2. Tambah Data (CREATE)
 async function createLog() {
   try {
-    // Format data sesuai backend: { country, driver, losses: [{year, tc_loss_ha}] }
     const payload = {
       country: createForm.value.country,
       driver: createForm.value.driver,
       losses: [{ year: createForm.value.year, tc_loss_ha: createForm.value.loss }]
     };
-    const response = await fetch(`${API_URL}`, { // Hapus trailing slash
+    const response = await fetch(`${API_URL}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -842,7 +902,11 @@ function sortByColumn(column) {
   currentPage.value = 1; // Reset to first page when sorting
 }
 
-onMounted(loadData);
+onMounted(() => {
+  loadData();
+  fetchDashboardStats();
+  fetchNews();
+});
 </script>
 
 <style scoped>

@@ -34,7 +34,10 @@ from app.db_connection import forest_collection
 # 6. Routing (Menghubungkan ke folder routes)
 # from app.routes.forest import router as forest_router
 from app.routes.case_routes import router as case_router
+from app.routes.news_routes import router as news_router
+
 app.include_router(case_router, prefix="/api/case", tags=["Case Monitoring"])
+app.include_router(news_router, prefix="/api/news", tags=["News"])
 
 @app.get("/")
 async def root():

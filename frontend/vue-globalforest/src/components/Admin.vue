@@ -18,7 +18,7 @@
             <i class="bi bi-upload text-success" style="font-size: 3rem;"></i>
             <h5 class="card-title mt-3">Import Data</h5>
             <p class="card-text">Bulk import data from Excel files.</p>
-            <button class="btn btn-success" @click="openImportModal">Import</button>
+            <button class="btn btn-success" @click="openImportModal">Coming Soon</button>
           </div>
         </div>
       </div>
@@ -40,7 +40,7 @@
             <i class="bi bi-people-fill text-warning" style="font-size: 3rem;"></i>
             <h5 class="card-title mt-3">User Management</h5>
             <p class="card-text">Manage users and permissions.</p>
-            <button class="btn btn-warning" disabled>Coming Soon</button>
+            <button class="btn btn-warning" @click="toggleUserManagement">Manage Users</button>
           </div>
         </div>
       </div>
@@ -144,6 +144,38 @@
         </nav>
       </div>
       <button class="btn btn-secondary mt-3" @click="showTable = false">Close Table</button>
+    </div>
+
+    <!-- User Management Table -->
+    <div v-if="showUserTable" class="mt-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>User Management</h2>
+      </div>
+      
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered">
+          <thead class="table-dark">
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in users" :key="user.id || user._id">
+              <td>{{ user.username }}</td>
+              <td>{{ user.email }}</td>
+              <td><span :class="user.role === 'admin' ? 'badge bg-danger' : 'badge bg-primary'">{{ user.role }}</span></td>
+              <td>
+                <button v-if="user.role !== 'admin'" class="btn btn-sm btn-outline-danger me-2" @click="updateUserRole(user, 'admin')">Make Admin</button>
+                <button v-if="user.role !== 'user'" class="btn btn-sm btn-outline-primary" @click="updateUserRole(user, 'user')">Make User</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <button class="btn btn-secondary mt-3" @click="showUserTable = false">Close Table</button>
     </div>
 
     <!-- Create Modal -->
@@ -279,6 +311,8 @@ const showCreateModal = ref(false);
 const showEditModal = ref(false);
 const selectedFile = ref(null);
 const showTable = ref(false);
+const showUserTable = ref(false);
+const users = ref([]);
 const cases = ref([]);
 const currentPage = ref(1);
 const totalPages = ref(1);
@@ -286,23 +320,23 @@ const totalItems = ref(0);
 const limit = 15;
 
 const createForm = reactive({
-  country: '',
-  driver: '',
-  year: new Date().getFullYear(),
-  tc_loss_ha: 0,
-  threshold: 30
+    country: '',
+    driver: '',
+    year: new Date().getFullYear(),
+    tc_loss_ha: 0,
+    threshold: 30
 });
 
 const editForm = reactive({
-  id: null,
-  originalCountry: '',
-  originalDriver: '',
-  originalYear: 0,
-  country: '',
-  driver: '',
-  year: 0,
-  tc_loss_ha: 0,
-  threshold: 0
+    id: null,
+    originalCountry: '',
+    originalDriver: '',
+    originalYear: 0,
+    country: '',
+    driver: '',
+    year: 0,
+    tc_loss_ha: 0,
+    threshold: 0
 });
 
 // Filters
@@ -313,47 +347,47 @@ const filterYear = ref(null);
 // Watch filters and refetch data
 watch([filterCountry, filterDriver, filterYear], () => {
   currentPage.value = 1; // Reset to first page
-  fetchCases(1);
+    fetchCases(1);
 });
 
 const visiblePages = computed(() => {
-  const pages = [];
-  const start = Math.max(1, currentPage.value - 2);
-  const end = Math.min(totalPages.value, currentPage.value + 2);
-  for (let i = start; i <= end; i++) {
-    pages.push(i);
-  }
-  return pages;
+    const pages = [];
+    const start = Math.max(1, currentPage.value - 2);
+    const end = Math.min(totalPages.value, currentPage.value + 2);
+    for (let i = start; i <= end; i++) {
+        pages.push(i);
+    }
+    return pages;
 });
 
 const openCreateModal = () => {
-  createForm.country = '';
-  createForm.driver = '';
-  createForm.year = new Date().getFullYear();
-  createForm.tc_loss_ha = 0;
-  createForm.threshold = 30;
-  showCreateModal.value = true;
+    createForm.country = '';
+    createForm.driver = '';
+    createForm.year = new Date().getFullYear();
+    createForm.tc_loss_ha = 0;
+    createForm.threshold = 30;
+    showCreateModal.value = true;
 };
 
 const openImportModal = () => {
-  showImportModal.value = true;
+    showImportModal.value = true;
 };
 
 const closeImportModal = () => {
-  showImportModal.value = false;
-  selectedFile.value = null;
+    showImportModal.value = false;
+    selectedFile.value = null;
 };
 
 const handleFileUpload = (event) => {
-  selectedFile.value = event.target.files[0];
+    selectedFile.value = event.target.files[0];
 };
 
 const importData = () => {
-  if (selectedFile.value) {
-    // Here you would implement the file upload logic
-    alert(`Importing ${selectedFile.value.name}... (Feature not implemented yet)`);
-    closeImportModal();
-  }
+    if (selectedFile.value) {
+        // Here you would implement the file upload logic
+        alert(`Importing ${selectedFile.value.name}... (Feature not implemented yet)`);
+        closeImportModal();
+    }
 };
 
 const toggleManageData = async () => {
@@ -361,6 +395,73 @@ const toggleManageData = async () => {
     await fetchCases(1);
   }
   showTable.value = !showTable.value;
+  if (showTable.value) showUserTable.value = false;
+};
+
+const toggleUserManagement = async () => {
+  if (!showUserTable.value) {
+    try {
+      const response = await fetch('/api/user/users');
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Debug Users Data:', result); // Cek console browser (F12) untuk melihat apakah ada field id/_id
+        
+        // Normalisasi data user: Pastikan setiap user memiliki properti 'id'
+        const rawUsers = Array.isArray(result) ? result : (result.data || []);
+        users.value = rawUsers.map(u => {
+          // Cari ID dari berbagai kemungkinan field (id, _id, user_id, userId)
+          let uid = u.id || u._id || u.user_id || u.userId;
+          
+          // Handle format MongoDB Extended JSON { "$oid": "..." } jika uid berupa object
+          if (typeof uid === 'object' && uid && uid.$oid) uid = uid.$oid;
+          if (!uid && u._id && typeof u._id === 'object' && u._id.$oid) uid = u._id.$oid;
+          
+          // Jika masih tidak ditemukan, coba cari key apapun yang mengandung kata 'id'
+          if (!uid) {
+             const key = Object.keys(u).find(k => k.toLowerCase().includes('id') && (typeof u[k] === 'string' || typeof u[k] === 'number'));
+             if (key) uid = u[key];
+          }
+
+          if (!uid) console.warn('Warning: User missing ID from backend. Available keys:', Object.keys(u));
+          return { ...u, id: uid };
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      alert('Gagal mengambil data user');
+    }
+  }
+  showUserTable.value = !showUserTable.value;
+  if (showUserTable.value) showTable.value = false;
+};
+
+const updateUserRole = async (user, newRole) => {
+  if (!confirm(`Are you sure you want to change ${user.username}'s role to ${newRole}?`)) return;
+
+  try {
+    const userId = user.id; // Menggunakan ID yang sudah dinormalisasi
+    if (!userId) {
+      console.error('User ID is missing for user:', user);
+      return;
+    }
+
+    const response = await fetch(`/api/user/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: newRole })
+    });
+
+    if (response.ok) {
+      alert(`User role updated to ${newRole}`);
+      user.role = newRole;
+    } else {
+      const err = await response.json();
+      alert('Failed to update role: ' + (err.detail || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error updating role:', error);
+    alert('Error updating role');
+  }
 };
 
 const fetchCases = async (page = 1) => {
@@ -517,22 +618,22 @@ const prevPage = async () => {
 
 <style scoped>
 .modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1050;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1050;
 }
 
 .modal-content {
-  background: white;
-  border-radius: 0.5rem;
-  max-width: 500px;
-  width: 100%;
+    background: white;
+    border-radius: 0.5rem;
+    max-width: 500px;
+    width: 100%;
 }
 </style>
